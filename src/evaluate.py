@@ -11,7 +11,10 @@ from dataset import get_datasets
 
 def evaluate():
     model_path = str(MODELS_DIR / "best_model.keras")
-    model = tf.keras.models.load_model(model_path)
+    model = tf.keras.models.load_model(
+    model_path,
+    safe_mode=False
+)
     print(f"Loaded model from {model_path}\n")
 
 
