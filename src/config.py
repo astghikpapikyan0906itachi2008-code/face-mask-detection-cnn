@@ -1,13 +1,18 @@
+from pathlib import Path
+
+
+ROOT_DIR = Path(__file__).parent.parent
+DATA_DIR = ROOT_DIR / "data"
+MODELS_DIR = ROOT_DIR / "models"
+
+
 IMAGE_SIZE = (224, 224)
 CHANNELS = 3
 
 BATCH_SIZE = 32
-EPOCHS = 10
-LEARNING_RATE = 0.001
-
-NUMBER_OF_CLASSES = 2
-CLASSES = ["with_mask", "without_mask"]
-
-TEST_SIZE = 0.2
-VAL_SPLIT = 0.5
+EPOCHS = 50          
+LEARNING_RATE = 1e-4
 RANDOM_STATE = 42
+
+
+THRESHOLD = 0.6

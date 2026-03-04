@@ -50,7 +50,8 @@ during evaluation.
 To train the model:
 
 ```bash
-python src/train.py
+python src/training.py
+```
 
 ## Evaluation
 

@@ -1,33 +1,51 @@
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense, Dropout
-from tensorflow.keras.optimizers import Adam
-from config import *
+import tensorflow as tf
+from tensorflow.keras import layers, Model
+from tensorflow.keras.applications import MobileNetV2
+from config import IMAGE_SIZE, CHANNELS, LEARNING_RATE
+
+
+def build_augmentation():
+    """Data augmentation applied only during training."""
+    return tf.keras.Sequential([
+        layers.RandomFlip("horizontal"),
+        layers.RandomRotation(0.1),
+        layers.RandomZoom(0.1),
+        layers.RandomContrast(0.1),
+    ], name="augmentation")
+
 
 def build_model():
-    model = Sequential([
-        Conv2D(32, (3,3), activation="relu",
-               input_shape=(*IMAGE_SIZE, CHANNELS)),
-        MaxPooling2D(2,2),
-        Dropout(0.25),
+    """
+    MobileNetV2 transfer learning model.
+    Base frozen → fine-tune top layers only.
+    """
+    preprocess = tf.keras.applications.mobilenet_v2.preprocess_input
 
-        Conv2D(64, (3,3), activation="relu"),
-        MaxPooling2D(2,2),
-        Dropout(0.25),
+    base = MobileNetV2(
+        input_shape=(*IMAGE_SIZE, CHANNELS),
+        include_top=False,
+        weights="imagenet",
+    )
+    base.trainable = False  
 
-        Conv2D(128, (3,3), activation="relu"),
-        MaxPooling2D(2,2),
-        Dropout(0.25),
+    augmentation = build_augmentation()
 
-        Flatten(),
-        Dense(128, activation="relu"),
-        Dropout(0.25),
-        Dense(1, activation="sigmoid")
-    ])
+    inputs = layers.Input(shape=(*IMAGE_SIZE, CHANNELS))
+    x = augmentation(inputs)                    
+    x = tf.keras.layers.Lambda(preprocess)(x)   
+    x = base(x, training=False)                   
+    x = layers.GlobalAveragePooling2D()(x)        
+    x = layers.Dropout(0.3)(x)
+    outputs = layers.Dense(1, activation="sigmoid")(x)
+
+    model = Model(inputs, outputs)
 
     model.compile(
-        optimizer=Adam(learning_rate=LEARNING_RATE),
+        optimizer=tf.keras.optimizers.Adam(learning_rate=LEARNING_RATE),
         loss="binary_crossentropy",
-        metrics=["accuracy"]
+        metrics=["accuracy",
+                 tf.keras.metrics.AUC(name="auc"),
+                 tf.keras.metrics.Precision(name="precision"),
+                 tf.keras.metrics.Recall(name="recall")],
     )
-
     return model

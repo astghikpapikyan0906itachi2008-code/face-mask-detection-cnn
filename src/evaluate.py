@@ -1,76 +1,60 @@
 import numpy as np
 import tensorflow as tf
-
-from dataset import load_data
-from config import CLASSES
-
 from sklearn.metrics import (
-    confusion_matrix,
-    classification_report,
-    roc_auc_score,
-    precision_recall_curve,
-    auc
+    confusion_matrix, classification_report,
+    roc_auc_score, average_precision_score,
 )
 
-MODEL_PATH = "models/cnn_simple.h5"
-THRESHOLDS = [0.3, 0.4, 0.5, 0.6, 0.7]
-FINAL_THRESHOLD = 0.6  
+from config import MODELS_DIR, THRESHOLD
+from dataset import get_datasets
 
 
-_, _, x_test, _, _, y_test = load_data()
-model = tf.keras.models.load_model(MODEL_PATH)
-
-loss, accuracy = model.evaluate(x_test, y_test, verbose=0)
-print(f"\nTest loss: {loss:.4f}")
-print(f"Test accuracy: {accuracy:.4f}")
+def evaluate():
+    model_path = str(MODELS_DIR / "best_model.keras")
+    model = tf.keras.models.load_model(model_path)
+    print(f"Loaded model from {model_path}\n")
 
 
-y_prob = model.predict(x_test).ravel()
+    _, val_ds = get_datasets()
 
 
+    y_true, y_pred_prob = [], []
+    for X_batch, y_batch in val_ds:
+        probs = model.predict(X_batch, verbose=0).flatten()
+        y_pred_prob.extend(probs.tolist())
+        y_true.extend(y_batch.numpy().tolist())
 
-print("\n==============================")
-print(" Threshold tuning results")
-print("==============================")
+    y_true = np.array(y_true)
+    y_pred_prob = np.array(y_pred_prob)
 
-for t in THRESHOLDS:
-    print(f"\n===== Threshold = {t} =====")
+    y_pred = (y_pred_prob >= THRESHOLD).astype(int)
 
-    y_pred = (y_prob >= t).astype(int)
-
-    print("Confusion Matrix:")
-    print(confusion_matrix(y_test, y_pred))
-
+   
+    print("=" * 50)
+    print(f"Threshold: {THRESHOLD}")
+    print("=" * 50)
+    print("\nConfusion Matrix:")
+    print(confusion_matrix(y_true, y_pred))
     print("\nClassification Report:")
-    print(classification_report(
-        y_test,
-        y_pred,
-        target_names=CLASSES
-    ))
+    print(classification_report(y_true, y_pred,
+                                target_names=["No Mask", "Mask"]))
 
-print("\n==============================")
-print(f" Final evaluation (threshold = {FINAL_THRESHOLD})")
-print("==============================")
+    roc_auc = roc_auc_score(y_true, y_pred_prob)
+    pr_auc = average_precision_score(y_true, y_pred_prob)
+    print(f"ROC-AUC : {roc_auc:.4f}")
+    print(f"PR-AUC  : {pr_auc:.4f}")
 
-y_pred_final = (y_prob >= FINAL_THRESHOLD).astype(int)
-
-print("Confusion Matrix:")
-print(confusion_matrix(y_test, y_pred_final))
-
-print("\nClassification Report:")
-print(classification_report(
-    y_test,
-    y_pred_final,
-    target_names=CLASSES
-))
+    print("\nThreshold sweep (0.3 → 0.7):")
+    print(f"{'Threshold':>10} {'Precision':>10} {'Recall':>10} {'F1':>10}")
+    for t in np.arange(0.3, 0.75, 0.05):
+        preds = (y_pred_prob >= t).astype(int)
+        report = classification_report(y_true, preds, output_dict=True,
+                                       zero_division=0)
+        p = report["1"]["precision"]
+        r = report["1"]["recall"]
+        f1 = report["1"]["f1-score"]
+        print(f"{t:>10.2f} {p:>10.4f} {r:>10.4f} {f1:>10.4f}")
 
 
-roc_auc = roc_auc_score(y_test, y_prob)
-precision, recall, _ = precision_recall_curve(y_test, y_prob)
-pr_auc = auc(recall, precision)
-
-print("\n==============================")
-print(" Threshold-independent metrics")
-print("==============================")
-print(f"ROC-AUC: {roc_auc:.4f}")
-print(f"PR-AUC:  {pr_auc:.4f}")
+if __name__ == "__main__":
+    evaluate()

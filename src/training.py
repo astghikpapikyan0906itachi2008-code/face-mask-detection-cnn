@@ -1,21 +1,59 @@
-import numpy as np
+import os
 import tensorflow as tf
-from dataset import load_data
+from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLROnPlateau
+
+from config import MODELS_DIR, EPOCHS
+from dataset import get_datasets
 from cnn_simple import build_model
-from config import *
 
-np.random.seed(RANDOM_STATE)
-tf.random.set_seed(RANDOM_STATE)
 
-x_train, x_val, x_test, y_train, y_val, y_test = load_data()
+def train():
+    
+    os.makedirs(MODELS_DIR, exist_ok=True)
 
-model = build_model()
 
-history = model.fit(
-    x_train, y_train,
-    validation_data=(x_val, y_val),
-    batch_size=BATCH_SIZE,
-    epochs=EPOCHS
-)
+    train_ds, val_ds = get_datasets()
 
-model.save("models/cnn_simple.h5")
+
+    model = build_model()
+    model.summary()
+
+
+    callbacks = [
+        EarlyStopping(
+            monitor="val_loss",
+            patience=5,
+            restore_best_weights=True,
+            verbose=1,
+        ),
+        ModelCheckpoint(
+            filepath=str(MODELS_DIR / "best_model.keras"),
+            monitor="val_loss",
+            save_best_only=True,
+            verbose=1,
+        ),
+        ReduceLROnPlateau(
+            monitor="val_loss",
+            factor=0.5,
+            patience=3,
+            min_lr=1e-7,
+            verbose=1,
+        ),
+    ]
+
+ 
+    history = model.fit(
+        train_ds,
+        validation_data=val_ds,
+        epochs=EPOCHS,
+        callbacks=callbacks,
+    )
+
+    model.save(str(MODELS_DIR / "final_model.keras"))
+    print(f"\nModels saved to {MODELS_DIR}")
+
+    return history
+
+
+if __name__ == "__main__":
+    train()
